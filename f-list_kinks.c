@@ -44,6 +44,7 @@ struct FListKinks_ {
     GSList *filter_role_choices;
     GSList *filter_position_choices;
     
+    gboolean local;
     gboolean looking;
     int kink1, kink2, kink3;
     int genders, roles;
@@ -208,7 +209,7 @@ static void flist_filter_done(FListAccount *fla) {
     JsonObject *json;
     JsonArray *kinks, *genders, *roles;
         
-    if(flk->kink1 || flk->kink2 || flk->kink3) {
+    if(!flk->local) {
         const gchar *kink1, *kink2, *kink3;
         json = json_object_new();
         genders = json_array_new();
@@ -296,7 +297,12 @@ static void flist_filter2_cb(gpointer user_data, PurpleRequestFields *fields) {
     
     flk->genders = flist_filter_unpack(fields, "gender", flk->filter_gender_choices);
     
-    flist_filter3(fla);
+    flk->local = !(flk->kink1 || flk->kink2 || flk->kink3);    
+    if(flk->local) { /* If this is a local search, we can't search for roles. */
+        flist_filter_done(fla);
+    } else { /* If this is not a local search, continue. */
+        flist_filter3(fla);
+    }
 }
 
 static void flist_filter2(FListAccount *fla) {
@@ -349,12 +355,13 @@ static void flist_add_kink_field(FListKinks *flk, PurpleRequestFieldGroup *group
     purple_request_field_group_add_field(group, field);
 }
 
-static void flist_filter1(FListAccount *fla) {
+static void flist_filter1(FListAccount *fla, const gchar *default_channel) {
     FListKinks *flk = _flist_kinks(fla);
     PurpleRequestFields *fields;
     PurpleRequestFieldGroup *group;
     PurpleRequestField *field;
     GList *channels, *cur;
+    int i = 0;
     
     group = purple_request_field_group_new("Options");
     fields = purple_request_fields_new();
@@ -365,13 +372,19 @@ static void flist_filter1(FListAccount *fla) {
 
     /* now, add all of our current channels to the list */
     field = purple_request_field_choice_new("channel", _("Channel"), 0);
-    purple_request_field_choice_add(field, "(No Filter)");
+    purple_request_field_choice_add(field, "(Any Channel)");
+    
     flk->filter_channel_choices = g_slist_prepend(flk->filter_channel_choices, NULL);
     channels = flist_channel_list_all(fla);
+    i = 1;
     for(cur = channels; cur; cur = g_list_next(cur)) {
         FListChannel *channel = cur->data;
         purple_request_field_choice_add(field, flist_channel_get_title(channel));
+        if(default_channel && flist_str_equal(channel->name, default_channel)) {
+            purple_request_field_choice_set_default_value(field, i);
+        }
         flk->filter_channel_choices = g_slist_prepend(flk->filter_channel_choices, g_strdup(channel->name));
+        i++;
     }
     g_list_free(channels);
     purple_request_field_group_add_field(group, field);
@@ -387,7 +400,7 @@ static void flist_filter1(FListAccount *fla) {
     flist_filter_dialog(fla, fields, G_CALLBACK(flist_filter1_cb));
 }
 
-static void flist_filter_real(PurpleConnection *pc) {
+static void flist_filter_real(PurpleConnection *pc, const gchar *channel) {
     FListAccount *fla;
 
     g_return_if_fail(pc);
@@ -395,18 +408,17 @@ static void flist_filter_real(PurpleConnection *pc) {
     
     if(fla->input_request) return;
 
-    flist_filter1(fla);
+    flist_filter1(fla, channel);
 }
 
 void flist_filter_action(PurplePluginAction *action) {
     PurpleConnection *pc = action->context;
-    flist_filter_real(pc);
+    flist_filter_real(pc, NULL);
 }
 
 PurpleCmdRet flist_filter_cmd(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
     PurpleConnection *pc = purple_conversation_get_gc(convo);
-
-    flist_filter_real(pc);
+    flist_filter_real(pc, NULL); //TODO: put the proper channel title here
 
     return PURPLE_CMD_STATUS_OK;
 }
