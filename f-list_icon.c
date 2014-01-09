@@ -41,7 +41,7 @@ static void flist_fetch_icon_cb(PurpleUtilFetchUrlData *url_data, gpointer data,
     checksum = "0"; /* what the fuck is this checksum supposed to be?? */
     character = fli->character;
     
-    purple_debug_info(FLIST_DEBUG, "Character Icon Received (Convo: %s): %s\n", fli->convo ? fli->convo : "none", character);
+    purple_debug_info(FLIST_DEBUG, "Received character icon! (Character: %s) (Convo: %s)\n", fli->character, fli->convo ? fli->convo : "none");
     
     if(err) {
         if(fli->convo) {
@@ -50,6 +50,10 @@ static void flist_fetch_icon_cb(PurpleUtilFetchUrlData *url_data, gpointer data,
                 purple_conv_custom_smiley_close(convo, fli->smiley);
             }
         }
+        purple_debug_warning(FLIST_DEBUG, "We have failed to fetch a character icon.");
+        purple_debug_warning(FLIST_DEBUG, "Character: %s\n", character);
+        purple_debug_warning(FLIST_DEBUG, "Convo: %s\n", fli->convo ? fli->convo : "none");
+        purple_debug_warning(FLIST_DEBUG, "Error Message: %s\n", err);
         //TODO: handle this error message more properly?
     } else {
         if(fli->convo) {
@@ -86,6 +90,8 @@ static void flist_fetch_icon_cb(PurpleUtilFetchUrlData *url_data, gpointer data,
 static void flist_fetch_icon_real(FListAccount *fla, FListFetchIcon *fli) {
     gchar *character_lower;
     gchar *url;
+    
+    purple_debug_info(FLIST_DEBUG, "Requesting character icon... (Character: %s) (Convo: %s)\n", fli->character, fli->convo ? fli->convo : "none");
 
     character_lower = g_utf8_strdown(fli->character, -1);
     url = g_strdup_printf("http://static.f-list.net/images/avatar/%s.png", purple_url_encode(character_lower));
