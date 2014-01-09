@@ -512,11 +512,6 @@ static gboolean flist_process_TPN(PurpleConnection *pc, JsonObject *root) {
 }
 
 
-static gboolean flist_process_WSH(PurpleConnection *pc, JsonObject *root) {
-    flist_IDN(pc);
-    return TRUE;
-}
-
 typedef gboolean(*flist_cb_fn)(PurpleConnection *, JsonObject *);
 
 static gboolean flist_process_IDN(PurpleConnection *pc, JsonObject *root) {
@@ -575,10 +570,7 @@ void flist_callback_init() {
             //KIN - kinks data
             //VAR - server variables
     
-    g_hash_table_insert(callbacks, "WSH", flist_process_WSH);
-    
     g_hash_table_insert(callbacks, "RTB", flist_process_RTB);
-    
     
     g_hash_table_insert(callbacks, "TPN", flist_process_TPN);
     
