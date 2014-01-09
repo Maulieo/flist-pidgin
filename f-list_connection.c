@@ -446,13 +446,12 @@ static void flist_receive_ticket(FListWebRequestData *req_data, gpointer data, J
 
 static gboolean flist_ticket_timer_cb(gpointer data) {
     FListAccount *fla = data;
-    const gchar *url_pattern = "http://www.f-list.net/json/getApiTicket.php";
+    const gchar *url = "http://www.f-list.net/json/getApiTicket.php";
     GHashTable *args = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
     g_hash_table_insert(args, "account", g_strdup(fla->username));
     g_hash_table_insert(args, "password", g_strdup(fla->password));
-    g_hash_table_insert(args, "secure", g_strdup("no"));
     
-    fla->ticket_request = flist_web_request(url_pattern, args, TRUE, flist_receive_ticket, fla); 
+    fla->ticket_request = flist_web_request(url, args, TRUE, flist_receive_ticket, fla); 
     fla->ticket_timer = 0;
     
     g_hash_table_destroy(args);
