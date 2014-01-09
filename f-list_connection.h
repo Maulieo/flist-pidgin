@@ -21,16 +21,22 @@
 #ifndef FLIST_CONNECTION_H
 #define FLIST_CONNECTION_H
 
+#define WS_FINAL_SEGMENT 0x01
+#define WS_OPCODE_TYPE_CONTINUATION 0x00
+
+#define WS_OPCODE_TYPE_TEXT 1
+#define WS_OPCODE_TYPE_BINARY 2
+#define WS_OPCODE_TYPE_CLOSE 8
+#define WS_OPCODE_TYPE_PING 9
+#define WS_OPCODE_TYPE_PONG 10
+
 #include "f-list.h"
 
 const gchar *flist_get_ticket(FListAccount *);
 void flist_request(PurpleConnection *, const gchar *, JsonObject *);
-void flist_IDN(PurpleConnection *);
-void flist_process(gpointer data, gint source, PurpleInputCondition cond);
 
 void flist_receive_ping(PurpleConnection *);
 void flist_ticket_timer(FListAccount *, guint);
-
 
 void flist_ticket_init();
 
