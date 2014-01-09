@@ -80,6 +80,7 @@ typedef struct FListFriends_ FListFriends;
 #define USER_AGENT              "Pidgin F-Chat 0.2.8.0"
 #define FLIST_PLUGIN_ID         "prpl-flist"
 #define FLIST_PORT              9722
+#define FLIST_PORT_SECURE       9799
 #define GLOBAL_NAME             "#FList"
 #define FLIST_DEBUG             "flist"
 
@@ -279,6 +280,7 @@ struct FListAccount_ {
     gint characters_remaining;
     gboolean online; //whether or not we've set pidgin to say we're online
     guint32 character_count; //total number of characters online, should be count(all_characters)
+    gboolean secure; //whether or not we use ssl/tls for the socket, and https for web requests
     gchar *username;
     gchar *character;
     gchar *password;
@@ -291,11 +293,14 @@ struct FListAccount_ {
     /* for tickets */
     guint ticket_timer;
     FListWebRequestData *ticket_request;
-        
+    
+    /* connection data */
+    PurpleSslConnection *ssl_con;
     gchar *rx_buf;
     gsize rx_len;
     int fd;
     int input_handle;
+    GString *frame_buffer;
     
     PurpleRoomlist *roomlist;
     gboolean input_request;

@@ -425,6 +425,7 @@ void flist_close(PurpleConnection *pc) {
     if(fla->connection_status == FLIST_CONNECT) purple_proxy_connect_cancel((void*) pc);
     if(fla->input_handle > 0) purple_input_remove(fla->input_handle);
     if(fla->fd > 0) close(fla->fd);
+    if(fla->ssl_con) purple_ssl_close(fla->ssl_con);
     if(fla->url_request) purple_util_fetch_url_cancel(fla->url_request);
     
     if(fla->username) g_free(fla->username);
@@ -437,6 +438,7 @@ void flist_close(PurpleConnection *pc) {
     
     if(fla->fls_cookie) g_free(fla->fls_cookie);
     g_free(fla->rx_buf);
+    if(fla->frame_buffer) g_free(fla->frame_buffer);
 
     if(fla->ping_timeout_handle) purple_timeout_remove(fla->ping_timeout_handle);
     
@@ -491,11 +493,17 @@ void flist_login(PurpleAccount *pa) {
     
     /* login options */
     fla->server_address = g_strdup(purple_account_get_string(pa, "server_address", "chat.f-list.net"));
-    fla->server_port = purple_account_get_int(pa, "server_port", FLIST_PORT);
-    fla->use_websocket_handshake = purple_account_get_bool(pa, "use_websocket_handshake", FALSE);
+//    fla->use_websocket_handshake = purple_account_get_bool(pa, "use_websocket_handshake", FALSE);
 
     fla->sync_bookmarks = purple_account_get_bool(pa, "sync_bookmarks", FALSE);
     fla->sync_friends = purple_account_get_bool(pa, "sync_friends", TRUE);
+    
+    fla->secure = purple_account_get_bool(pa, "use_https", TRUE);
+    if(!fla->secure) {
+        fla->server_port = purple_account_get_int(pa, "server_port", FLIST_PORT);
+    } else {
+        fla->server_port = purple_account_get_int(pa, "server_port_secure", FLIST_PORT_SECURE);
+    }
     
     fla->debug_mode = purple_account_get_bool(pa, "debug_mode", FALSE);
     
@@ -659,11 +667,18 @@ static void plugin_init(PurplePlugin *plugin) {
     option = purple_account_option_string_new("Server Address", "server_address", "chat.f-list.net");
     prpl_info.protocol_options = g_list_append(prpl_info.protocol_options, option);
 
-    option = purple_account_option_int_new("Server Port", "server_port", FLIST_PORT);
+    option = purple_account_option_int_new("Server Port (Unsecure)", "server_port", FLIST_PORT);
     prpl_info.protocol_options = g_list_append(prpl_info.protocol_options, option);
     
-    option = purple_account_option_bool_new("Use WebSocket Handshake", "use_websocket_handshake", FALSE);
+    option = purple_account_option_int_new("Server Port (Secure)", "server_port_secure", FLIST_PORT_SECURE);
     prpl_info.protocol_options = g_list_append(prpl_info.protocol_options, option);
+    
+    option = purple_account_option_bool_new("Use Secure Connections", "use_https", TRUE);
+    prpl_info.protocol_options = g_list_append(prpl_info.protocol_options, option);
+  
+//deprecated option
+//    option = purple_account_option_bool_new("Use WebSocket Handshake", "use_websocket_handshake", FALSE);
+//    prpl_info.protocol_options = g_list_append(prpl_info.protocol_options, option);
 
     option = purple_account_option_bool_new("Download Friends List", "sync_friends", TRUE);
     prpl_info.protocol_options = g_list_append(prpl_info.protocol_options, option);
