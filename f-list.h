@@ -341,7 +341,6 @@ struct FListAccount_ {
 };
 
 //f-list sources
-#include "f-list_http.h"
 #include "f-list_callbacks.h"
 #include "f-list_commands.h"
 #include "f-list_autobuddy.h"
