@@ -499,7 +499,7 @@ static void flist_receive_ticket(FListWebRequestData *req_data, gpointer data, J
 
 static gboolean flist_ticket_timer_cb(gpointer data) {
     FListAccount *fla = data;
-    const gchar *url = "http://www.f-list.net/json/getApiTicket.php";
+    const gchar *url = JSON_GET_TICKET;
     GHashTable *args = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
     g_hash_table_insert(args, "account", g_strdup(fla->username));
     g_hash_table_insert(args, "password", g_strdup(fla->password));

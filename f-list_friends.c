@@ -21,17 +21,6 @@
 
 #include "f-list_friends.h"
 
-#define JSON_BOOKMARK_ADD       "http://www.f-list.net/json/api/bookmark-add.php"
-#define JSON_BOOKMARK_REMOVE    "http://www.f-list.net/json/api/bookmark-remove.php"
-
-#define JSON_FRIENDS_REQUEST    "http://www.f-list.net/json/api/request-send.php"
-#define JSON_FRIENDS_REMOVE     "http://www.f-list.net/json/api/friend-remove.php"
-#define JSON_FRIENDS_ACCEPT     "http://www.f-list.net/json/api/request-accept.php"
-#define JSON_FRIENDS_DENY       "http://www.f-list.net/json/api/request-deny.php"
-#define JSON_FRIENDS_CANCEL     "http://www.f-list.net/json/api/request-cancel.php"
-
-#define JSON_FRIENDS            "http://www.f-list.net/json/api/friend-bookmark-lists.php"
-
 #define FLIST_FRIENDS_SYNC_TIMEOUT 1800
 
 #define ERROR_CANNOT_BOOKMARK "This user doesn't want to be bookmarked."
