@@ -539,24 +539,6 @@ static gboolean flist_process_PRI(PurpleConnection *pc, JsonObject *root) {
     return TRUE;
 }
 
-static gboolean flist_process_RTB(PurpleConnection *pc, JsonObject *root) {
-    FListAccount *fla = pc->proto_data;
-    const gchar *type = json_object_get_string_member(root, "type");
-    
-    purple_debug_info(FLIST_DEBUG, "We have received an RTB: %s\n", type);
-
-    if(flist_str_equal(type, "friendrequest")) {
-        flist_friends_received_request(fla);
-    }
-    if(flist_str_equal(type, "friendadd")) {
-        flist_friends_added_friend(fla);
-    }
-    if(flist_str_equal(type, "friendremove")) {
-        flist_friends_removed_friend(fla);
-    }
-    return TRUE;
-}
-
 gboolean flist_callback(PurpleConnection *pc, const gchar *code, JsonObject *root) {
     flist_cb_fn callback = g_hash_table_lookup(callbacks, code);
     if(!callback) return TRUE;

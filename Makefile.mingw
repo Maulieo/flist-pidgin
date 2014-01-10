@@ -37,21 +37,21 @@ WIN32_LIBS = \
 
 FLIST_SOURCES = \
         f-list.c \
-		f-list_admin.c \
+	f-list_admin.c \
         f-list_autobuddy.c \
         f-list_bbcode.c \
         f-list_callbacks.c \
         f-list_channels.c \
         f-list_commands.c \
         f-list_connection.c \
-        f-list_http.c \
         f-list_icon.c \
         f-list_kinks.c \
         f-list_profile.c \
         f-list_json.c \
         f-list_friends.c \
         f-list_status.c \
-		f-list_pidgin.c
+        f-list_rtb.c \
+        f-list_pidgin.c
 
 #Standard stuff here
 all: 	flist.dll

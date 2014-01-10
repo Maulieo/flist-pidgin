@@ -76,8 +76,8 @@ typedef struct FListFriends_ FListFriends;
 //void flist_account_set_operator(PurpleConnection *pc, const gchar *name, gboolean operator);
 
 #define FLIST_CLIENT_NAME "F-List Pidgin"
-#define FLIST_PLUGIN_VERSION    "0.2.8.0"
-#define USER_AGENT              "Pidgin F-Chat 0.2.8.0"
+#define FLIST_PLUGIN_VERSION    "3.0"
+#define USER_AGENT              "Pidgin F-Chat 3.0"
 #define FLIST_PLUGIN_ID         "prpl-flist"
 #define FLIST_PORT              9722
 #define FLIST_PORT_SECURE       9799
@@ -354,6 +354,7 @@ struct FListAccount_ {
 #include "f-list_json.h"
 #include "f-list_friends.h"
 #include "f-list_status.h"
+#include "f-list_rtb.h"
 #include "f-list_pidgin.h" //TODO: maybe not include this ...
 
 #endif

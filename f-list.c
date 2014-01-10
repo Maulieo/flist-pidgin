@@ -310,7 +310,7 @@ void flist_channel_show_message(FListAccount *fla, const gchar *channel) {
     to_print = g_strdup_printf("We are currently [i]%s[/i] and [i]%s[/i].",
             show_chat ? "showing chat" : "[color=red]hiding chat[/color]",
             show_ads ? "showing ads" : "[color=red]hiding ads[/color]");
-    to_print_formatted = flist_bbcode_to_html(fla, (PurpleConversation*) chat, to_print);
+    to_print_formatted = flist_bbcode_to_html(fla, purple_conv_chat_get_conversation(chat), to_print);
     purple_conv_chat_write(chat, "System", to_print_formatted, PURPLE_MESSAGE_SYSTEM, time(NULL));
     g_free(to_print);
     g_free(to_print_formatted);

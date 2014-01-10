@@ -430,7 +430,6 @@ void flist_cancel_roomlist(PurpleRoomlist *list) {
 #define PURPLE_MESSAGE_FLIST 0x04000000
 int flist_send_message(PurpleConnection *pc, const gchar *who, const gchar *message, PurpleMessageFlags flags) {
     FListAccount *fla = pc->proto_data;
-    PurpleAccount *pa = purple_connection_get_account(pc);
     JsonObject *json;
     PurpleConvIm *im;
     gchar *stripped_message, *escaped_message, *local_message, *bbcode_message;
@@ -438,13 +437,15 @@ int flist_send_message(PurpleConnection *pc, const gchar *who, const gchar *mess
 
     g_return_val_if_fail(fla, 0);
 
-    purple_debug(PURPLE_DEBUG_INFO, "flist", "Sending: %s\n", message);
-    purple_debug(PURPLE_DEBUG_INFO, "flist", "Flags: %x\n", flags);
+    purple_debug_info(FLIST_DEBUG, "Sending message... (From: %s) (To: %s) (Message: %s) (Flags: %x)\n",
+        fla->character, who, message, flags);
+    
+    im = PURPLE_CONV_IM(purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, who, fla->pa));
 
     stripped_message = purple_markup_strip_html(message); /* strip out formatting */
     escaped_message = purple_unescape_html(stripped_message); /* escape the html entities that are left */
     local_message = purple_markup_escape_text(stripped_message, -1); /* re-escape the html entities */
-    bbcode_message = flist_bbcode_to_html(fla, NULL, local_message); /* convert the bbcode to html to display locally */
+    bbcode_message = flist_bbcode_to_html(fla, purple_conv_im_get_conversation(im), local_message); /* convert the bbcode to html to display locally */
 
     json = json_object_new();
     json_object_set_string_member(json, "recipient", who);
@@ -452,16 +453,15 @@ int flist_send_message(PurpleConnection *pc, const gchar *who, const gchar *mess
     flist_request(pc, FLIST_REQUEST_PRIVATE_MESSAGE, json);
     json_object_unref(json);
 
-    im = PURPLE_CONV_IM(purple_find_conversation_with_account(PURPLE_CONV_TYPE_IM, who, pa));
-    if(!im) {
-        ret = 1; //display it now
-    } else {
-        purple_debug(PURPLE_DEBUG_INFO, "flist", "Writing: %s\n", bbcode_message);
+    if(im) { /* This should always be the case. */
         purple_conv_im_write(im, NULL, bbcode_message, flags, time(NULL));
         ret = 0; //we've already displayed it
+    } else {
+        purple_debug_warning("flist", "Sent message, but convo not found. (From: %s) (To: %s)\n",
+            fla->character, who);
+        ret = 1; //display it now
     }
-
-    //TODO: track error messages
+    
     g_free(stripped_message);
     g_free(escaped_message);
     g_free(bbcode_message);
@@ -493,12 +493,38 @@ static gchar *flist_fix_newlines(const char *html) {
     return g_string_free(ret, FALSE);
 }
 
+static void flist_send_channel_message_real(FListAccount *fla, PurpleConversation *convo, const gchar *message, gboolean ad) {
+    JsonObject *json = json_object_new();
+    gchar *stripped_message, *escaped_message, *local_message, *bbcode_message;
+    const gchar *channel = purple_conversation_get_name(convo);
+    purple_debug_info("flist", "Sending message to channel... (Character: %s) (Channel: %s) (Message: %s) (Ad: %s)\n", 
+        fla->character, channel, message, ad ? "yes" : "no");
+    
+    stripped_message = purple_markup_strip_html(message); /* strip out formatting */
+    escaped_message = purple_unescape_html(stripped_message); /* unescape the html entities that are left */
+    local_message = purple_markup_escape_text(stripped_message, -1); /* re-escape the html entities */
+    if(ad) {
+        gchar *tmp = g_strdup_printf("[b](Roleplay Ad)[/b] %s", local_message);
+        g_free(local_message);
+        local_message = tmp;
+    }
+    bbcode_message = flist_bbcode_to_html(fla, convo, local_message); /* convert the bbcode to html to display locally */
+    channel = purple_conversation_get_name(convo);
+    json_object_set_string_member(json, "message", escaped_message);
+    json_object_set_string_member(json, "channel", channel);
+    flist_request(fla->pc, !ad ? FLIST_REQUEST_CHANNEL_MESSAGE : FLIST_CHANNEL_ADVERSTISEMENT, json);
+    
+    serv_got_chat_in(fla->pc, purple_conv_chat_get_id(PURPLE_CONV_CHAT(convo)), fla->proper_character, PURPLE_MESSAGE_SEND, bbcode_message, time(NULL));
+
+    g_free(escaped_message);
+    g_free(stripped_message);
+    g_free(bbcode_message);
+    g_free(local_message);
+}
+
 int flist_send_channel_message(PurpleConnection *pc, int id, const char *message, PurpleMessageFlags flags) {
     FListAccount *fla = pc->proto_data;
     PurpleConversation *convo = purple_find_chat(pc, id);
-    JsonObject *json = json_object_new();
-    const gchar *channel;
-    gchar *stripped_message, *escaped_message, *local_message, *bbcode_message;
 
     g_return_val_if_fail((fla = pc->proto_data), -EINVAL);
 
@@ -507,28 +533,19 @@ int flist_send_channel_message(PurpleConnection *pc, int id, const char *message
         return -EINVAL;
     }
     
-    purple_debug(PURPLE_DEBUG_INFO, "flist", "Sending: %s\n", message);
-    purple_debug(PURPLE_DEBUG_INFO, "flist", "Flags: %x\n", flags);
-
-    stripped_message = purple_markup_strip_html(message); /* strip out formatting */
-    escaped_message = purple_unescape_html(stripped_message); /* unescape the html entities that are left */
-    local_message = purple_markup_escape_text(stripped_message, -1); /* re-escape the html entities */
-    bbcode_message = flist_bbcode_to_html(fla, convo, local_message); /* convert the bbcode to html to display locally */
-    channel = purple_conversation_get_name(convo);
-    json_object_set_string_member(json, "message", escaped_message);
-    json_object_set_string_member(json, "channel", channel);
-    flist_request(pc, FLIST_REQUEST_CHANNEL_MESSAGE, json);
-
-    purple_debug(PURPLE_DEBUG_INFO, "flist", "Writing: %s\n", bbcode_message);
-    serv_got_chat_in(pc, id, fla->proper_character, flags, bbcode_message, time(NULL));
-
-    //TODO: track the message in case we get an error message?
-    g_free(escaped_message);
-    g_free(stripped_message);
-    g_free(bbcode_message);
-    g_free(local_message);
-    
+    flist_send_channel_message_real(fla, convo, message, FALSE);
     return 0;
+}
+
+PurpleCmdRet flist_roll_bottle(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
+    PurpleConnection *pc = purple_conversation_get_gc(convo);
+    JsonObject *json = json_object_new();
+    const gchar *channel = purple_conversation_get_name(convo);
+    json_object_set_string_member(json, "channel", channel);
+    json_object_set_string_member(json, "dice", "bottle");
+    flist_request(pc, FLIST_ROLL_DICE, json);
+    json_object_unref(json);
+    return PURPLE_CMD_STATUS_OK;
 }
 
 PurpleCmdRet flist_roll_dice(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
@@ -536,7 +553,7 @@ PurpleCmdRet flist_roll_dice(PurpleConversation *convo, const gchar *cmd, gchar 
     JsonObject *json = json_object_new();
     const gchar *channel = purple_conversation_get_name(convo);
     json_object_set_string_member(json, "channel", channel);
-    json_object_set_string_member(json, "dice", args[0]); //TODO: check for proper dice format: xdy
+    json_object_set_string_member(json, "dice", args[0]);
     flist_request(pc, FLIST_ROLL_DICE, json);
     json_object_unref(json);
     return PURPLE_CMD_STATUS_OK;
@@ -589,43 +606,29 @@ PurpleCmdRet flist_channel_hide_chat_cmd(PurpleConversation *convo, const gchar 
     return PURPLE_CMD_STATUS_OK;
 }
 
-//TODO: unify this with the other 'channel send message'
 PurpleCmdRet flist_channel_send_ad(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
     PurpleConnection *pc = purple_conversation_get_gc(convo);
     FListAccount *fla = pc->proto_data;
-    JsonObject *json;
-    const gchar *channel = purple_conversation_get_name(convo);
     const gchar *message = args[0];
-    gchar *e1, *e2, *e3, *local_message, *full_message, *bbcode_message;
-
-    g_return_val_if_fail(fla, 0);
-
-    purple_debug(PURPLE_DEBUG_INFO, "flist", "Sending Ad: %s\n", message);
+    gchar *fixed_message = flist_fix_newlines(message);
     
-    e1 = flist_fix_newlines(message); /* fix the newlines ... */
-    e2 = purple_markup_strip_html(e1); /* strip out formatting */
-    e3 = purple_unescape_html(e2); /* escape the html entities that are left */
-    local_message = purple_markup_escape_text(e3, -1); /* re-escape the html entities */
-    full_message = g_strdup_printf("[b](Roleplay Ad)[/b] %s", local_message);
-    bbcode_message = flist_bbcode_to_html(fla, NULL, full_message); /* convert the bbcode to html to display locally */
-
-    json = json_object_new();
-    json_object_set_string_member(json, "channel", channel);
-    json_object_set_string_member(json, "message", e3);
-    flist_request(pc, FLIST_CHANNEL_ADVERSTISEMENT, json);
-    json_object_unref(json);
-
-    purple_debug(PURPLE_DEBUG_INFO, "flist", "Writing: %s\n", bbcode_message);
-    serv_got_chat_in(pc, PURPLE_CONV_CHAT(convo)->id, fla->proper_character, 
-            PURPLE_MESSAGE_SEND, bbcode_message, time(NULL));    
+    flist_send_channel_message_real(fla, convo, fixed_message, TRUE);
     
-    //TODO: track error messages
-    g_free(e1);
-    g_free(e2);
-    g_free(e3);
-    g_free(bbcode_message);
-    g_free(full_message);
-    g_free(local_message);
+    g_free(fixed_message);
+    return PURPLE_CMD_STATUS_OK;
+}
+ 
+PurpleCmdRet flist_channel_warning(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
+    PurpleConnection *pc = purple_conversation_get_gc(convo);
+    FListAccount *fla = pc->proto_data;
+    const gchar *message = args[0];
+    gchar *fixed_message = flist_fix_newlines(message);
+    gchar *extended_message = g_strdup_printf("/warn %s", fixed_message);
+    
+    flist_send_channel_message_real(fla, convo, extended_message, FALSE);
+ 
+    g_free(fixed_message);
+    g_free(extended_message);
     return PURPLE_CMD_STATUS_OK;
 }
 
@@ -709,7 +712,11 @@ void flist_init_commands() {
 
     purple_cmd_register("roll", "s", PURPLE_CMD_P_PRPL, channel_flags,
         FLIST_PLUGIN_ID, flist_roll_dice, "roll &lt;dice&gt;: Rolls dice.", NULL);
+    purple_cmd_register("bottle", "", PURPLE_CMD_P_PRPL, channel_flags,
+        FLIST_PLUGIN_ID, flist_roll_bottle, "bottle: Spins a bottle.", NULL);
     
+    purple_cmd_register("warn", "s", PURPLE_CMD_P_PRPL, channel_flags,
+        FLIST_PLUGIN_ID, flist_channel_warning, "warn &lt;message&gt;: Sends a warning.", NULL);
     purple_cmd_register("ad", "s", PURPLE_CMD_P_PRPL, channel_flags,
         FLIST_PLUGIN_ID, flist_channel_send_ad, "ad &lt;message&gt;: Sends a \"looking for role play\" ad.", NULL);
     purple_cmd_register("showads", "", PURPLE_CMD_P_PRPL, channel_flags,
