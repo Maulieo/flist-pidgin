@@ -123,12 +123,29 @@ void flist_got_channel_title(FListAccount *fla, const gchar *channel, const gcha
     fchannel->title = g_strdup(title);
 }
 
+static void flist_show_channel_topic(FListAccount *fla, const gchar *channel) {
+    PurpleConversation *convo = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, channel, fla->pa);
+    FListChannel *fchannel = flist_channel_find(fla, channel);
+    gchar *escaped_description, *html_description;
+    
+    g_return_if_fail(convo != NULL);
+    g_return_if_fail(fchannel != NULL);
+    g_return_if_fail(fchannel->topic != NULL); //TODO: better error handling than not showing anything.
+    
+    escaped_description = purple_markup_escape_text(fchannel->topic, -1);
+    html_description = flist_bbcode_to_html(fla, convo, escaped_description);
+    
+    //message = g_strdup_printf("The description for %s is: %s", purple_conversation_get_title(convo), html_description);
+    purple_conv_chat_write(PURPLE_CONV_CHAT(convo), "", html_description, PURPLE_MESSAGE_SYSTEM, time(NULL));
+    
+    g_free(escaped_description);
+    g_free(html_description);
+}
+
 void flist_got_channel_topic(FListAccount *fla, const gchar *channel, const gchar *topic) {
     PurpleConversation *convo = purple_find_conversation_with_account(PURPLE_CONV_TYPE_CHAT, channel, fla->pa);
     FListChannel *fchannel = flist_channel_find(fla, channel);
-    gchar *escaped_channel, *escaped_description;
-    gchar *html_description, *stripped_description, *stripped_description_2, *unescaped_description;
-    gchar *message;
+    gchar *escaped_description, *stripped_description, *stripped_description_2, *unescaped_description;
     
     g_return_if_fail(topic != NULL);
     g_return_if_fail(convo != NULL);
@@ -137,25 +154,23 @@ void flist_got_channel_topic(FListAccount *fla, const gchar *channel, const gcha
     if(fchannel->topic) g_free(fchannel->topic);
     fchannel->topic = g_strdup(topic);
     
-    escaped_channel = purple_markup_escape_text(channel, -1);
-    escaped_description = purple_markup_escape_text(topic, -1);
-
-    html_description = flist_bbcode_to_html(fla, convo, escaped_description);
+    escaped_description = purple_markup_escape_text(fchannel->topic, -1);
     stripped_description = flist_bbcode_strip(escaped_description);
     stripped_description_2 = flist_strip_crlf(stripped_description);
     unescaped_description = purple_unescape_html(stripped_description_2);
     
-    message = g_strdup_printf("The description for %s is: %s", purple_conversation_get_title(convo), html_description);
-    purple_conv_chat_write(PURPLE_CONV_CHAT(convo), "", message, PURPLE_MESSAGE_SYSTEM, time(NULL));
     purple_conv_chat_set_topic(PURPLE_CONV_CHAT(convo), NULL, unescaped_description);
-    
-    g_free(message); g_free(escaped_channel); g_free(escaped_description);
-    g_free(html_description); g_free(stripped_description); g_free(stripped_description_2); g_free(unescaped_description);
+    flist_show_channel_topic(fla, channel);
     
     if(purple_conversation_get_data(convo, CHAT_SHOW_DISPLAY_STATUS)) {
         purple_conversation_set_data(convo, CHAT_SHOW_DISPLAY_STATUS, GINT_TO_POINTER(FALSE));
         flist_channel_show_message(fla, channel);
     }
+    
+    g_free(escaped_description);
+    g_free(stripped_description);
+    g_free(stripped_description_2);
+    g_free(unescaped_description);
 }
 
 void flist_got_channel_userlist(FListAccount *fla, const gchar *channel, GList *userlist) {
@@ -686,6 +701,19 @@ PurpleCmdRet flist_channel_close_cmd(PurpleConversation *convo, const gchar *cmd
     //TODO: don't allow this on public channels
 
     json_object_unref(json);
+    return PURPLE_CMD_STATUS_OK;
+}
+
+PurpleCmdRet flist_channel_show_topic_cmd(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
+    PurpleConnection *pc = purple_conversation_get_gc(convo);
+    FListAccount *fla = pc ? pc->proto_data : NULL;
+    const gchar *channel;
+    
+    g_return_val_if_fail(fla, PURPLE_CMD_STATUS_FAILED);
+
+    channel = purple_conversation_get_name(convo);
+    flist_show_channel_topic(fla, channel);
+
     return PURPLE_CMD_STATUS_OK;
 }
 
