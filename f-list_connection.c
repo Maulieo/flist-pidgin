@@ -397,8 +397,13 @@ static void flist_process_secure(gpointer data, PurpleSslConnection *ssl_con, Pu
 
 static void flist_handshake(FListAccount *fla) {
     GString *headers_str = g_string_new(NULL);
-    gchar *headers;
-    int len;
+    gchar *headers, *b64_data;
+    int i, len;
+    guchar nonce[16];
+    for(i = 0; i < 16; i++) {
+        nonce[i] = (guchar) (g_random_int() & 0xFF);
+    }
+    b64_data = g_base64_encode(nonce, 16);
     
     fla->ping_timeout_handle = purple_timeout_add_seconds(FLIST_TIMEOUT, flist_disconnect_cb, fla->pc);
     
@@ -407,7 +412,7 @@ static void flist_handshake(FListAccount *fla) {
     g_string_append(headers_str, "Connection: Upgrade\r\n");
     g_string_append_printf(headers_str, "Host: %s:%d\r\n", fla->server_address, fla->server_port);
     g_string_append(headers_str, "Origin: http://www.f-list.net\r\n");
-    g_string_append(headers_str, "Sec-WebSocket-Key: ?1:70X 1q057L74,6>\\\r\n"); //TODO: insert proper randomness here!
+    g_string_append_printf(headers_str, "Sec-WebSocket-Key: %s\r\n", b64_data); //TODO: insert proper randomness here!
     g_string_append(headers_str, "Sec-WebSocket-Version: 13\r\n");
     g_string_append(headers_str, "\r\n");
     headers = g_string_free(headers_str, FALSE);
@@ -416,6 +421,9 @@ static void flist_handshake(FListAccount *fla) {
     len = flist_write_raw(fla, headers, strlen(headers)); //TODO: check return value
     fla->connection_status = FLIST_HANDSHAKE;
     g_free(headers);
+    
+    //TODO: save this to verify the handshake
+    g_free(b64_data);
 }
 
 static void flist_ssl_cb(gpointer user_data, PurpleSslConnection *ssl_con, PurpleInputCondition ic) {
@@ -441,7 +449,7 @@ static void flist_connected(gpointer user_data, int fd, const gchar *err) {
         return;
     }
     
-    if(fla->secure) { /* If this is a secure connection, we have to perform the SSL handshake. */
+    if(fla->secure) { // If this is a secure connection, we have to perform the SSL handshake.
         purple_debug_info(FLIST_DEBUG, "Sending SSL handshake...\n");
         fla->ssl_con = purple_ssl_connect_with_host_fd(fla->pa, fd, flist_ssl_cb, flist_ssl_error_cb, fla->server_address, fla);
         return;
@@ -452,7 +460,7 @@ static void flist_connected(gpointer user_data, int fd, const gchar *err) {
     flist_handshake(fla);
 }
 
-static void flist_connect(FListAccount *fla) { /* Open the network connection to the server. */
+static void flist_connect(FListAccount *fla) {
     purple_debug_info(FLIST_DEBUG, "Connecting... (Server: %s) (Port: %d) (Secure: %s)\n", 
             fla->server_address, fla->server_port, fla->secure ? "yes" : "no");
     if(!purple_proxy_connect(fla->pc, fla->pa, fla->server_address, fla->server_port, flist_connected, fla)) {
