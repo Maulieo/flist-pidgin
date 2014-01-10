@@ -165,7 +165,7 @@ gboolean flist_process_PRD(PurpleConnection *pc, JsonObject *root) {
 static gboolean flist_process_profile(FListAccount *fla, JsonObject *root) {
     FListProfiles *flp = _flist_profiles(fla);
     JsonObject *info;
-    GList *categories, *cur, *fields, *cur2;
+    GList *categories, *cur;
     GHashTable *profile;
     const gchar *error;
 
@@ -181,20 +181,24 @@ static gboolean flist_process_profile(FListAccount *fla, JsonObject *root) {
 
     cur = categories;
     while(cur) {
-        const gchar *name = cur->data;
-        JsonObject *fields_object = json_object_get_object_member(info, name);
-        fields = json_object_get_members(fields_object);
-        cur2 = fields;
-        while(cur2) {
-            const gchar *fieldid = cur2->data;
-            JsonArray *field_array = json_object_get_array_member(fields_object, fieldid);
-            const gchar *key = json_array_get_string_element(field_array, 0);
-            const gchar *value = json_array_get_string_element(field_array, 1);
-            g_hash_table_insert(profile, (gpointer) key, (gpointer) value);
-            cur2 = g_list_next(cur2);
+        const gchar *group_name;
+        JsonObject *field_group;
+        JsonArray *field_array;
+        guint i, len;
+        
+        field_group = json_object_get_object_member(info, cur->data);
+        group_name = json_object_get_string_member(field_group, "group");
+        field_array = json_object_get_array_member(field_group, "items");
+
+        len = json_array_get_length(field_array);
+        for(i = 0; i < len; i++) {
+            JsonObject *field_object = json_array_get_object_element(field_array, i);
+            const gchar *field_name = json_object_get_string_member(field_object, "name");
+            const gchar *field_value = json_object_get_string_member(field_object, "value");
+            g_hash_table_insert(profile, (gpointer) field_name, (gpointer) field_value);
         }
-        g_list_free(fields);
-        cur = g_list_next(cur);
+        
+        cur = cur->next;
     }
     g_list_free(categories);
 
@@ -275,9 +279,9 @@ void flist_get_profile(PurpleConnection *pc, const char *who) {
         g_free(flp->character); flp->character = NULL;
         purple_notify_user_info_destroy(flp->profile_info); flp->profile_info = NULL;
     } else if(flp->category_table) { /* Try to get the profile through the website API first. */
-        GHashTable *args = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+        GHashTable *args = flist_web_request_args(fla);
         g_hash_table_insert(args, "name", g_strdup(flp->character));
-        flp->profile_request = flist_web_request(JSON_CHARACTER_GET, args, TRUE, fla->secure, flist_get_profile_cb, fla);
+        flp->profile_request = flist_web_request(JSON_CHARACTER_INFO, args, TRUE, fla->secure, flist_get_profile_cb, fla);
         g_hash_table_destroy(args);
     } else { /* Try to get the profile through F-Chat. */
         JsonObject *json = json_object_new();
@@ -304,7 +308,6 @@ static void flist_global_profile_cb(FListWebRequestData *req_data,
     FListProfiles *flp = _flist_profiles(fla);
     JsonObject *info;
     GList *categories, *cur;
-    int i, len;
 
     flp->global_profile_request = NULL;
     
@@ -326,13 +329,13 @@ static void flist_global_profile_cb(FListWebRequestData *req_data,
     categories = json_object_get_members(info);
     cur = categories;
     while(cur) {
-        const gchar *group_id = cur->data;
         const gchar *group_name;
         JsonObject *field_group;
         JsonArray *field_array;
         FListProfileFieldCategory *category;
+        guint i, len;
         
-        field_group = json_object_get_object_member(info, group_id);
+        field_group = json_object_get_object_member(info, cur->data);
         group_name = json_object_get_string_member(field_group, "group");
         field_array = json_object_get_array_member(field_group, "items");
         

@@ -12,7 +12,7 @@
 #define JSON_FRIENDS_DENY       "www.f-list.net/json/api/request-deny.php"
 #define JSON_FRIENDS_CANCEL     "www.f-list.net/json/api/request-cancel.php"
 #define JSON_FRIENDS            "www.f-list.net/json/api/friend-bookmark-lists.php"
-#define JSON_CHARACTER_GET      "www.f-list.net/json/api/character-get.php"
+#define JSON_CHARACTER_INFO     "www.f-list.net/json/api/character-info.php"
 
 #define JSON_INFO_LIST          "www.f-list.net/json/api/info-list.php"
 #define JSON_KINK_LIST          "www.f-list.net/json/api/kink-list.php"
