@@ -140,7 +140,7 @@ void flist_got_channel_topic(FListAccount *fla, const gchar *channel, const gcha
     escaped_channel = purple_markup_escape_text(channel, -1);
     escaped_description = purple_markup_escape_text(topic, -1);
 
-    html_description = flist_bbcode_to_html(fla, NULL, escaped_description);
+    html_description = flist_bbcode_to_html(fla, convo, escaped_description);
     stripped_description = flist_bbcode_strip(escaped_description);
     stripped_description_2 = flist_strip_crlf(stripped_description);
     unescaped_description = purple_unescape_html(stripped_description_2);

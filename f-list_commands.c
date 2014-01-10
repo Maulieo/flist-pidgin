@@ -101,12 +101,12 @@ void flist_get_tooltip(PurpleBuddy *buddy, PurpleNotifyUserInfo *user_info, gboo
     PurpleConnection *pc = purple_account_get_connection(pa);
     FListAccount *fla;
     FListCharacter *character;
-    const gchar *identity = purple_buddy_get_name(buddy);
+    const gchar *identity = flist_normalize(pa, purple_buddy_get_name(buddy));
     FListFriendStatus friend_status;
     gboolean bookmarked;
     
     g_return_if_fail((fla = pc->proto_data));
-    character = g_hash_table_lookup(fla->all_characters, identity);
+    character = flist_get_character(fla, identity);
     
     bookmarked = flist_friends_is_bookmarked(fla, identity);
     friend_status = flist_friends_get_friend_status(fla, identity);
@@ -135,7 +135,7 @@ gchar *flist_get_status_text(PurpleBuddy *buddy) {
     g_return_val_if_fail(pc, NULL);
     g_return_val_if_fail((fla = pc->proto_data), NULL);
     
-    character = g_hash_table_lookup(fla->all_characters, flist_normalize(pa, buddy->name));
+    character = flist_get_character(fla, flist_normalize(pa, buddy->name));
     if(!character) return NULL; /* user is offline, no problem here */
     
     empty_status = is_empty_status(character->status);

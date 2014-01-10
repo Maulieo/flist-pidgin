@@ -267,9 +267,11 @@ void flist_get_profile(PurpleConnection *pc, const char *who) {
     if(!character) {
         purple_notify_user_info_add_pair(flp->profile_info, "Status", "Offline");
     } else {
+        gchar *parsed_message = flist_bbcode_to_html(fla, NULL, character->status_message);
         purple_notify_user_info_add_pair(flp->profile_info, "Status", flist_format_status(character->status));
         purple_notify_user_info_add_pair(flp->profile_info, "Gender", flist_format_gender(character->gender));
-        purple_notify_user_info_add_pair(flp->profile_info, "Message", character->status_message);
+        purple_notify_user_info_add_pair(flp->profile_info, "Message", parsed_message);
+        g_free(parsed_message);
     }
     purple_notify_user_info_add_pair(flp->profile_info, "Link", link);
     purple_notify_userinfo(pc, flp->character, flp->profile_info, NULL, NULL);
