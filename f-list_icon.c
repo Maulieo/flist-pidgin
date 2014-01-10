@@ -41,8 +41,6 @@ static void flist_fetch_icon_cb(PurpleUtilFetchUrlData *url_data, gpointer data,
     checksum = "0"; /* what the fuck is this checksum supposed to be?? */
     character = fli->character;
     
-    purple_debug_info(FLIST_DEBUG, "Received character icon! (Character: %s) (Convo: %s)\n", fli->character, fli->convo ? fli->convo : "none");
-    
     if(err) {
         if(fli->convo) {
             PurpleConversation *convo = purple_find_conversation_with_account(PURPLE_CONV_TYPE_ANY, fli->convo, fla->pa);
@@ -50,19 +48,17 @@ static void flist_fetch_icon_cb(PurpleUtilFetchUrlData *url_data, gpointer data,
                 purple_conv_custom_smiley_close(convo, fli->smiley);
             }
         }
-        purple_debug_warning(FLIST_DEBUG, "We have failed to fetch a character icon.");
-        purple_debug_warning(FLIST_DEBUG, "Character: %s\n", character);
-        purple_debug_warning(FLIST_DEBUG, "Convo: %s\n", fli->convo ? fli->convo : "none");
-        purple_debug_warning(FLIST_DEBUG, "Error Message: %s\n", err);
-        //TODO: handle this error message more properly?
+        purple_debug_warning(FLIST_DEBUG, "Failed to fetch a character icon. (Character: %s) (Convo: %s) (Secure: %s) (Error Message: %s)\n",
+            fli->character, fli->convo ? fli->convo : "none", fla->secure ? "yes" : "no", err);
     } else {
+        purple_debug_info(FLIST_DEBUG, "Received character icon. (Character: %s) (Convo: %s) (Secure: %s)\n",
+                fli->character, fli->convo ? fli->convo : "none", fla->secure ? "yes" : "no");
         if(fli->convo) {
             PurpleConversation *convo = purple_find_conversation_with_account(PURPLE_CONV_TYPE_ANY, fli->convo, fla->pa);
             if(convo) {
-                purple_debug_info(FLIST_DEBUG, "Writing character icon: %s\n", fli->smiley);
+                purple_debug_info(FLIST_DEBUG, "Writing character icon to convo... (Smiley: %s)\n", fli->smiley);
                 purple_conv_custom_smiley_write(convo, fli->smiley, (const guchar *) b, len);
                 purple_conv_custom_smiley_close(convo, fli->smiley);
-                purple_debug_info(FLIST_DEBUG, "Character icon written!...\n");
             }
         } else {
             purple_buddy_icons_set_for_user(fla->pa, character, g_memdup(b, len), len, checksum);
@@ -91,10 +87,11 @@ static void flist_fetch_icon_real(FListAccount *fla, FListFetchIcon *fli) {
     gchar *character_lower;
     gchar *url;
     
-    purple_debug_info(FLIST_DEBUG, "Requesting character icon... (Character: %s) (Convo: %s)\n", fli->character, fli->convo ? fli->convo : "none");
+    purple_debug_info(FLIST_DEBUG, "Fetching character icon... (Character: %s) (Convo: %s) (Secure: %s)\n", 
+        fli->character, fli->convo ? fli->convo : "none", fla->secure ? "yes" : "no");
 
     character_lower = g_utf8_strdown(fli->character, -1);
-    url = g_strdup_printf("http://static.f-list.net/images/avatar/%s.png", purple_url_encode(character_lower));
+    url = g_strdup_printf("%sstatic.f-list.net/images/avatar/%s.png", fla->secure ? "https://" : "http://", purple_url_encode(character_lower));
     fli->url_data = purple_util_fetch_url_request(url, TRUE, USER_AGENT, TRUE, NULL, FALSE, flist_fetch_icon_cb, fli);
     fla->icon_requests = g_slist_prepend(fla->icon_requests, fli);
     
