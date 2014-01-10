@@ -754,6 +754,9 @@ void flist_init_commands() {
     purple_cmd_register("search", "", PURPLE_CMD_P_PRPL, anywhere_flags,
         FLIST_PLUGIN_ID, flist_filter_cmd, "search: Opens the character search form.", NULL);
 
+    purple_cmd_register("who", "", PURPLE_CMD_P_PRPL, channel_flags,
+        FLIST_PLUGIN_ID, flist_channel_who_cmd, "who: Lists the users in the current channel.", NULL);
+
     purple_cmd_register("kick", "s", PURPLE_CMD_P_PRPL, channel_flags,
         FLIST_PLUGIN_ID, flist_channel_kick_ban_unban_cmd, "kick &lt;character&gt;: Kicks a user from the channel.", NULL);
     purple_cmd_register("ban", "s", PURPLE_CMD_P_PRPL, channel_flags,
