@@ -783,7 +783,9 @@ static void plugin_init(PurplePlugin *plugin) {
     flist_callback_init();
     flist_init_commands();
     flist_bbcode_init();
+#ifdef FLIST_PURPLE_ONLY
     flist_pidgin_init();
+#endif
     flist_web_requests_init();
     flist_ticket_init();
 }
