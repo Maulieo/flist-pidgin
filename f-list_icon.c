@@ -26,7 +26,7 @@
 typedef struct FListFetchIcon_ {
     FListAccount *fla;
     PurpleUtilFetchUrlData *url_data;
-    gchar *convo;
+    gchar *convo; //TODO: store convo type for rare possible case that chat and im have same name?
     gchar *smiley;
     gchar *character;
 } FListFetchIcon;
@@ -106,8 +106,6 @@ void flist_fetch_icon(FListAccount *fla, const gchar *character) {
     fli->character = g_strdup(character);
     fli->fla = fla;
     
-    //TODO: show some restraint!
-    
     len = g_slist_length(fla->icon_requests);
     if(len < FLIST_MAX_ICON_REQUESTS) {
         flist_fetch_icon_real(fla, fli);
@@ -146,7 +144,7 @@ void flist_fetch_icon_cancel_all(FListAccount *fla) {
         FListFetchIcon *fli = req->data;
         g_free(fli->character);
         if(fli->convo) {
-            //TODO: maybe cancel the request? probably not...
+            /* POSSIBLE WARNING: We do not cancel writing the custom smiley. */
             g_free(fli->convo);
         }
         if(fli->smiley) g_free(fli->smiley);
