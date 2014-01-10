@@ -320,7 +320,7 @@ static gboolean flist_handle_input(PurpleConnection *pc) {
         }
         object = json_node_get_object(root);
     } else {
-        if(fla->debug_mode) purple_debug_info(FLIST_DEBUG, "(No JSON data was included.)");
+        if(fla->debug_mode) purple_debug_info(FLIST_DEBUG, "(No JSON data was included.)\n");
     }
     
     success = TRUE;

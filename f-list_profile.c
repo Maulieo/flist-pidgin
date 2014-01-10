@@ -319,25 +319,39 @@ static void flist_global_profile_cb(FListWebRequestData *req_data,
         return;
     }
     
+    purple_debug_info(FLIST_DEBUG, "Processing global profile fields...\n");
+    
     flp->category_table = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, NULL);
     
     categories = json_object_get_members(info);
     cur = categories;
     while(cur) {
-        const gchar *name = cur->data;
-        JsonArray *fields_array = json_object_get_array_member(info, name);
-        FListProfileFieldCategory *category = g_new0(FListProfileFieldCategory, 1);
+        const gchar *group_id = cur->data;
+        const gchar *group_name;
+        JsonObject *field_group;
+        JsonArray *field_array;
+        FListProfileFieldCategory *category;
+        
+        field_group = json_object_get_object_member(info, group_id);
+        group_name = json_object_get_string_member(field_group, "group");
+        field_array = json_object_get_array_member(field_group, "items");
+        
+        category = g_new0(FListProfileFieldCategory, 1);
+        category->name = g_strdup(group_name);
 
-        category->name = g_strdup(name);
-
-        len = json_array_get_length(fields_array);
+        len = json_array_get_length(field_array);
         for(i = 0; i < len; i++) {
-            JsonArray *field_array = json_array_get_array_element(fields_array, i);
+            JsonObject *field_object = json_array_get_object_element(field_array, i);
             FListProfileField *field = g_new0(FListProfileField, 1);
             field->category = category;
-            field->fieldid = g_strdup(json_array_get_string_element(field_array, 0));
-            field->name = g_strdup(json_array_get_string_element(field_array, 1));
+            field->fieldid = g_strdup_printf("%d", (gint) json_object_get_int_member(field_object, "id"));
+            field->name = g_strdup(json_object_get_string_member(field_object, "name"));
             category->fields = g_slist_prepend(category->fields, field);
+            if(fla->debug_mode) {
+                purple_debug_info(FLIST_DEBUG, 
+                        "Global profile field processed. (ID: %s) (Category: %s) (Name: %s)\n", 
+                        field->fieldid, field->category->name, field->name);
+            }
         }
         category->fields = g_slist_sort(category->fields, (GCompareFunc) flist_profile_field_cmp);
         flp->category_list = g_slist_append(flp->category_list, category);
@@ -346,9 +360,7 @@ static void flist_global_profile_cb(FListWebRequestData *req_data,
     }
     g_list_free(categories);
     
-    purple_debug_info(FLIST_DEBUG, 
-        "We received the global list of profile fields. Total Categories: %d\n", 
-        g_hash_table_size(flp->category_table));
+    purple_debug_info(FLIST_DEBUG, "Global profile fields processed. (Categories: %d)\n", g_hash_table_size(flp->category_table));
 }
 
 void flist_profile_load(PurpleConnection *pc) {
