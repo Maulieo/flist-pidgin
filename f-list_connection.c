@@ -79,10 +79,10 @@ static void flist_write_hybi(FListAccount *fla, guint8 opcode, gchar *content, g
         *ptr = (guint8) ((len >>  0) & 0xFF); ptr++;
     } else if(len >= 65536) {
         *ptr = 0xFF; ptr++;
-        *ptr = (guint8) ((len >>  56) & 0xFF); ptr++;
-        *ptr = (guint8) ((len >>  48) & 0xFF); ptr++;
-        *ptr = (guint8) ((len >>  40) & 0xFF); ptr++;
-        *ptr = (guint8) ((len >>  32) & 0xFF); ptr++;
+        *ptr = (guint8) 0; ptr++;
+        *ptr = (guint8) 0; ptr++;
+        *ptr = (guint8) 0; ptr++;
+        *ptr = (guint8) 0; ptr++;
         *ptr = (guint8) ((len >>  24) & 0xFF); ptr++;
         *ptr = (guint8) ((len >>  16) & 0xFF); ptr++;
         *ptr = (guint8) ((len >>   8) & 0xFF); ptr++;
@@ -499,13 +499,12 @@ static void flist_receive_ticket(FListWebRequestData *req_data, gpointer data, J
 
 static gboolean flist_ticket_timer_cb(gpointer data) {
     FListAccount *fla = data;
-    const gchar *url = JSON_GET_TICKET;
     GHashTable *args = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
     g_hash_table_insert(args, "account", g_strdup(fla->username));
     g_hash_table_insert(args, "password", g_strdup(fla->password));
     
     purple_debug_info(FLIST_DEBUG, "Requesting ticket... (Account: %s) (Character: %s)\n", fla->username, fla->character);
-    fla->ticket_request = flist_web_request(url, args, TRUE, flist_receive_ticket, fla);
+    fla->ticket_request = flist_web_request(JSON_GET_TICKET, args, TRUE, fla->secure, flist_receive_ticket, fla);
     fla->ticket_timer = 0;
     
     g_hash_table_destroy(args);

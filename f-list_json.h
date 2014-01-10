@@ -12,10 +12,14 @@
 #define JSON_FRIENDS_DENY       "www.f-list.net/json/api/request-deny.php"
 #define JSON_FRIENDS_CANCEL     "www.f-list.net/json/api/request-cancel.php"
 #define JSON_FRIENDS            "www.f-list.net/json/api/friend-bookmark-lists.php"
+#define JSON_CHARACTER_GET      "www.f-list.net/json/api/character-get.php"
+
+#define JSON_INFO_LIST          "www.f-list.net/json/api/info-list.php"
+#define JSON_KINK_LIST          "www.f-list.net/json/api/kink-list.php"
 
 typedef void            (*FListWebCallback)       (FListWebRequestData*, gpointer data, JsonObject *, const gchar *error);
 
-FListWebRequestData* flist_web_request(const gchar*, GHashTable*, gboolean post, FListWebCallback, gpointer data);
+FListWebRequestData* flist_web_request(const gchar*, GHashTable*, gboolean post, gboolean secure, FListWebCallback, gpointer data);
 void flist_web_request_cancel(FListWebRequestData*);
 
 GHashTable *flist_web_request_args(FListAccount*);

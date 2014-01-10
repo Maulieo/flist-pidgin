@@ -428,14 +428,13 @@ static void flist_global_kinks_cb(FListWebRequestData *req_data,
     FListAccount *fla = user_data;
     FListKinks *flk = _flist_kinks(fla);
     JsonObject *kinks;
-    JsonArray *kinks_array;
     GList *categories, *cur;
     int i, len;
     
     flk->global_kinks_request = NULL;
-
+    
     if(!root) {
-        purple_debug_warning(FLIST_DEBUG, "Failed to obtain the global list of kinks. Error Message: %s\n", error_message);
+        purple_debug_error(FLIST_DEBUG, "Failed to obtain the global list of kinks. Error Message: %s\n", error_message);
         return;
     }
     
@@ -444,29 +443,42 @@ static void flist_global_kinks_cb(FListWebRequestData *req_data,
         purple_debug_warning(FLIST_DEBUG, "We received the global list of kinks, but it was empty.\n");
         return;
     }
-
+    
+    purple_debug_info(FLIST_DEBUG, "Processing global kink list...\n");
+    
     flk->kinks_table = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL); //TODO: write freeing function!
-
+    
     categories = json_object_get_members(kinks);
     cur = categories;
     while(cur) {
-        const gchar *category = cur->data;
-        kinks_array = json_object_get_array_member(kinks, category);
+        const gchar *category_id = cur->data;
+        JsonArray *kinks_array;
+        JsonObject *kink_group;
+        const gchar *category_name;
+        
+        kink_group = json_object_get_object_member(kinks, category_id);
+        category_name = json_object_get_string_member(kink_group, "group");
+        kinks_array = json_object_get_array_member(kink_group, "items");
         len = json_array_get_length(kinks_array);
         for(i = 0; i < len; i++) {
             JsonObject *kink_object = json_array_get_object_element(kinks_array, i);
             FListKink *kink = g_new0(FListKink, 1);
-            kink->category = purple_unescape_html(category);
+            kink->category = purple_unescape_html(category_name);
             kink->description = purple_unescape_html(json_object_get_string_member(kink_object, "description"));
             kink->name = purple_unescape_html(json_object_get_string_member(kink_object, "name"));
-            kink->kink_id = purple_unescape_html(json_object_get_string_member(kink_object, "fetish_id"));
+            kink->kink_id = g_strdup_printf("%d", (gint) json_object_get_int_member(kink_object, "kink_id"));
             g_hash_table_insert(flk->kinks_table, g_strdup(kink->name), kink);
+            if(fla->debug_mode) {
+                purple_debug_info(FLIST_DEBUG, 
+                        "Global kink processed. (ID: %s) (Category: %s) (Name: %s) (Description: %s)\n", 
+                        kink->kink_id, kink->category, kink->name, kink->description);
+            }
         }
         cur = g_list_next(cur);
     }
     g_list_free(categories);
 
-    purple_debug_info(FLIST_DEBUG, "We recieved the global list of kinks. Total kinks: %d\n", g_hash_table_size(flk->kinks_table));
+    purple_debug_info(FLIST_DEBUG, "Global kink list processed. (Kinks: %d)\n", g_hash_table_size(flk->kinks_table));
 
     flk->kinks_list = g_list_sort(g_hash_table_get_values(flk->kinks_table), (GCompareFunc) flist_kinkcmp);
     
@@ -487,7 +499,9 @@ void flist_global_kinks_load(PurpleConnection *pc) {
     const gchar **p;
     fla->flist_kinks = g_new0(FListKinks, 1);
     flk = _flist_kinks(fla);
-    flk->global_kinks_request = flist_web_request(FLIST_GLOBAL_KINKS_URL, NULL, TRUE, flist_global_kinks_cb, fla);
+    
+    purple_debug_info("Fetching global kink list... (Account: %s) (Character: %s)\n", fla->username, fla->character);
+    flk->global_kinks_request = flist_web_request(JSON_KINK_LIST, NULL, TRUE, fla->secure, flist_global_kinks_cb, fla);
     
     genders = flist_get_gender_list();
     while(genders) {

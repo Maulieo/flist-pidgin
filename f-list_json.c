@@ -149,15 +149,17 @@ gboolean flist_web_request_timeout(gpointer data) {
     return FALSE;
 }
 
-FListWebRequestData* flist_web_request(const gchar* url, GHashTable* args, gboolean post, FListWebCallback cb, gpointer data) {
-    gchar *http = http_request(url, TRUE, post, USER_AGENT, args, NULL);
+FListWebRequestData* flist_web_request(const gchar* url, GHashTable* args, gboolean post, gboolean secure, FListWebCallback cb, gpointer data) {
+    gchar *full_url = g_strdup_printf("%s%s", secure ? "http://" : "https://", url);
+    gchar *http = http_request(full_url, TRUE, post, USER_AGENT, args, NULL);
     FListWebRequestData *ret = g_new0(FListWebRequestData, 1);
-    PurpleUtilFetchUrlData *url_data = purple_util_fetch_url_request(url, FALSE, USER_AGENT, FALSE, http, FALSE, flist_web_request_cb, ret);
+    PurpleUtilFetchUrlData *url_data = purple_util_fetch_url_request(full_url, FALSE, USER_AGENT, FALSE, http, FALSE, flist_web_request_cb, ret);
     ret->url_data = url_data;
     ret->cb = cb;
     ret->user_data = data;
     ret->timer = purple_timeout_add_seconds(FLIST_WEB_REQUEST_TIMEOUT, (GSourceFunc) flist_web_request_timeout, ret);
     g_hash_table_insert(requests, ret, ret);
+    g_free(full_url);
     return ret;
 }
 

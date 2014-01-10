@@ -274,14 +274,12 @@ void flist_get_profile(PurpleConnection *pc, const char *who) {
         //The character is offline. There's nothing more we should do.
         g_free(flp->character); flp->character = NULL;
         purple_notify_user_info_destroy(flp->profile_info); flp->profile_info = NULL;
-    } else if(flp->category_table) {
-        //Try to get the profile through the website API first.
-        const gchar *url_pattern = "http://www.f-list.net/api/get/info/?name=%s";
-        gchar *url = g_strdup_printf(url_pattern, purple_url_encode(flp->character));
-        //TODO: Update this to use the new API.
-        flp->profile_request = flist_web_request(url, NULL, TRUE, flist_get_profile_cb, fla);
-    } else {
-        //Try to get the profile through F-Chat.
+    } else if(flp->category_table) { /* Try to get the profile through the website API first. */
+        GHashTable *args = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+        g_hash_table_insert(args, "name", g_strdup(flp->character));
+        flp->profile_request = flist_web_request(JSON_CHARACTER_GET, args, TRUE, fla->secure, flist_get_profile_cb, fla);
+        g_hash_table_destroy(args);
+    } else { /* Try to get the profile through F-Chat. */
         JsonObject *json = json_object_new();
         json_object_set_string_member(json, "character", flp->character);
         flist_request(pc, "PRO", json);
@@ -356,13 +354,12 @@ static void flist_global_profile_cb(FListWebRequestData *req_data,
 void flist_profile_load(PurpleConnection *pc) {
     FListAccount *fla = pc->proto_data;
     FListProfiles *flp;
-    const gchar *url = "http://www.f-list.net/api/get/infolist/";
     GSList *priority = NULL;
     
     fla->flist_profiles = g_new0(FListProfiles, 1);
     flp = _flist_profiles(fla);
     
-    flp->global_profile_request = flist_web_request(url, NULL, TRUE, flist_global_profile_cb, fla);
+    flp->global_profile_request = flist_web_request(JSON_INFO_LIST, NULL, TRUE, fla->secure, flist_global_profile_cb, fla);
 
     FListProfileField *field;
     
