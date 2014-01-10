@@ -300,7 +300,7 @@ struct FListAccount_ {
     gsize rx_len;
     int fd;
     int input_handle;
-    GString *frame_buffer;
+    GByteArray *frame_buffer;
     
     PurpleRoomlist *roomlist;
     gboolean input_request;

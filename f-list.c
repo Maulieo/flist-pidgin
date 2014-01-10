@@ -438,7 +438,7 @@ void flist_close(PurpleConnection *pc) {
     
     if(fla->fls_cookie) g_free(fla->fls_cookie);
     g_free(fla->rx_buf);
-    if(fla->frame_buffer) g_free(fla->frame_buffer);
+    if(fla->frame_buffer) g_byte_array_free(fla->frame_buffer, TRUE);
 
     if(fla->ping_timeout_handle) purple_timeout_remove(fla->ping_timeout_handle);
     

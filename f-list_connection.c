@@ -158,55 +158,107 @@ static gboolean flist_recv(FListAccount *fla) {
     return TRUE;
 }
 
-static gchar *flist_process_hybi(FListAccount *fla, gboolean is_final, guint8 opcode, gchar *payload, gsize payload_len) {
-    gchar *tmp;
-    switch(opcode) { /* Check for all possible error conditions. */
+static gboolean flist_dispatch(FListAccount *fla, gchar *message, gsize len) {
+    JsonParser *parser = NULL;
+    JsonNode *root = NULL;
+    JsonObject *object = NULL;
+    GError *err = NULL;
+    gchar *code = NULL;
+    gboolean success = FALSE;
+    
+    if(len < 3) {
+        purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent an invalid packet.");
+        goto cleanup;
+    }
+    
+    code = g_strndup(message, 3);
+    if(fla->debug_mode) purple_debug_info(FLIST_DEBUG, "Parsing message... (Code: %s)\n", code);
+    
+    if(len > 3) {
+        parser = json_parser_new();
+        json_parser_load_from_data(parser, message + 4, len - 4, &err);
+        
+        if(err) { /* not valid json */
+            purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent non-JSON data.");
+            g_error_free(err);
+            goto cleanup;
+        }
+        root = json_parser_get_root(parser);
+        if(json_node_get_node_type(root) != JSON_NODE_OBJECT) {
+            purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent JSON data that is not an object.");
+            goto cleanup;
+        }
+        object = json_node_get_object(root);
+    } else {
+        if(fla->debug_mode) purple_debug_info(FLIST_DEBUG, "(No JSON data was included.)\n");
+    }
+    
+    success = TRUE;
+    purple_debug_info(FLIST_DEBUG, "Processing message... (Code: %s)\n", code);
+    flist_callback(fla->pc, code, object);
+    
+    cleanup:
+    if(code) g_free(code);
+    if(parser) g_object_unref(parser);
+    
+    return success;
+}
+
+static gboolean flist_process_hybi_frame(FListAccount *fla, gboolean is_final, guint8 opcode, gchar *payload, gsize payload_len) {
+    switch(opcode) {
     case WS_OPCODE_TYPE_BINARY:
     case WS_OPCODE_TYPE_TEXT:
         if(fla->frame_buffer) {
             purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent a WebSocket data frame, but we are expecting a continuation frame.");
-            return NULL;
+            return FALSE;
         }
-        if(!is_final) { /* We only have part of a frame. Save it instead of returning it. */
-            fla->frame_buffer = g_string_new_len(payload, payload_len);
-            return NULL;
+        if(!is_final) { // We only have part of a frame. Save it instead of returning it.
+            fla->frame_buffer = g_byte_array_new();
+            g_byte_array_append(fla->frame_buffer, (guint8*) payload, payload_len);
+            return TRUE;
         }
-        return g_strndup(payload, payload_len);
-    case WS_OPCODE_TYPE_CONTINUATION:
+        return flist_dispatch(fla, payload, payload_len);
+    case WS_OPCODE_TYPE_CONTINUATION: {
+        gchar *full_message;
+        gsize full_len;
+        gboolean ret;
         if(!fla->frame_buffer) {
             purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server unexpectedly sent a WebSocket continuation frame.");
-            return NULL;
+            return FALSE;
         }
-        g_string_append_len(fla->frame_buffer, payload, payload_len);
-        if(!is_final) return NULL;
-        tmp = g_string_free(fla->frame_buffer, FALSE);
+        g_byte_array_append(fla->frame_buffer, (guint8*) payload, payload_len);
+        if(!is_final) return TRUE;
+        full_len = fla->frame_buffer->len;
+        full_message = (gchar*) g_byte_array_free(fla->frame_buffer, FALSE);
         fla->frame_buffer = NULL;
-        return tmp;
+        ret = flist_dispatch(fla, full_message, full_len);
+        g_free(full_message);
+        return ret;
+    }
     case WS_OPCODE_TYPE_PING: //We have to respond with a 'pong' frame.
         if(!is_final) {
             purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent a fragmented WebSocket ping frame.");
-            return NULL;
+            return FALSE;
         }
         flist_write_hybi(fla, WS_OPCODE_TYPE_PONG, payload, payload_len);
-        return NULL;
+        return TRUE;
     case WS_OPCODE_TYPE_PONG: //Silently discard.
         if(!is_final) {
             purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent a fragmented WebSocket pong frame.");
-            return NULL;
+            return FALSE;
         }
-        return NULL;
+        return TRUE;
     case WS_OPCODE_TYPE_CLOSE:
         purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server has terminated the connection with a WebSocket close frame.");
-        return NULL;
+        return FALSE;
     default:
         purple_connection_error_reason(fla->pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent a WebSocket frame with an unknown opcode.");
-        return NULL;
+        return FALSE;
     }
 }
 
-/* This function returns the payload of the next incoming data frame, or NULL if none is available. */
-/* It processes, handles, and silently discards control frames. */
-static gchar *flist_handle_hybi(FListAccount *fla) {
+/* This function processes all available hybi frames. */
+static void flist_process_hybi(FListAccount *fla) {
     gchar *cur, *rx_end;
     guint8 opcode;
     gboolean is_final, is_masked;
@@ -215,13 +267,13 @@ static gchar *flist_handle_hybi(FListAccount *fla) {
     gchar *payload;
     gsize payload_len;
     int offset;
-    gchar *full_payload = NULL;
+    gboolean stop = FALSE;
     
-    while(!full_payload) { //TODO: When a connection error happens, this loop should stop.
+    while(!stop) {
         rx_end = fla->rx_buf + fla->rx_len;
         
         cur = fla->rx_buf;
-        if(cur + 2 > rx_end) return NULL;
+        if(cur + 2 > rx_end) return;
 
         is_final = (*cur & 0x80) != 0;
         opcode = *cur & 0x0F;
@@ -232,12 +284,12 @@ static gchar *flist_handle_hybi(FListAccount *fla) {
         
         switch(raw_len) { /* TODO: These conversations should work, but we should not be casting pointers. */
         case 0x7E: /* The actual length is the next two bytes in big endian format. */
-            if(cur + 2 > rx_end) return NULL;
+            if(cur + 2 > rx_end) return;
             payload_len = GUINT16_FROM_BE(*((guint16*) cur));
             cur += 2;
             break;
         case 0x7F: /* The actual length is the next eight bytes in big endian format. */
-            if(cur + 8 > rx_end) return NULL;
+            if(cur + 8 > rx_end) return;
             payload_len = GUINT64_FROM_BE(*((guint64*) cur));
             cur += 8;
             break;
@@ -246,7 +298,7 @@ static gchar *flist_handle_hybi(FListAccount *fla) {
         }
         
         if(is_masked) {
-            if(cur + 4 > rx_end) return NULL;
+            if(cur + 4 > rx_end) return;
             mask[0] = cur[0];
             mask[1] = cur[1];
             mask[2] = cur[2];
@@ -254,86 +306,25 @@ static gchar *flist_handle_hybi(FListAccount *fla) {
             cur += 4;
         }
         
-        if(cur + payload_len > rx_end) return NULL;
+        if(cur + payload_len > rx_end) return;
         payload = g_malloc(payload_len);
         memcpy(payload, cur, payload_len);
         cur += payload_len;
         
-        if(is_masked) { /* Unmask the data. */
+        if(is_masked) { // Unmask the data.
             for(offset = 0; offset < payload_len; offset++) {
                 payload[offset] = payload[offset] ^ mask[offset % 4];
             }
         }
         
-        /* We've read one new frame. We clean up the buffer here. */
+        // We've read one new frame. We clean up the buffer here.
         fla->rx_len = (gsize) (fla->rx_buf + fla->rx_len - cur);
         memmove(fla->rx_buf, cur, fla->rx_len + 1);
         
-        full_payload = flist_process_hybi(fla, is_final, opcode, payload, payload_len);
+        stop = !flist_process_hybi_frame(fla, is_final, opcode, payload, payload_len);
         
         g_free(payload);
     }
-
-    return full_payload;
-}
-
-static gboolean flist_handle_input(PurpleConnection *pc) {
-    FListAccount *fla = pc->proto_data;
-    JsonParser *parser = NULL;
-    JsonNode *root = NULL;
-    JsonObject *object = NULL;
-    GError *err = NULL;
-    gchar *message = NULL, *code = NULL, *json = NULL;
-    gsize len;
-    gboolean success = FALSE;
-
-    g_return_val_if_fail(fla, FALSE);
-    
-    message = flist_handle_hybi(fla);
-    if(!message) return FALSE;
-    
-    len = strlen(message);
-    if(len < 3) {
-        purple_connection_error_reason(pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent an invalid packet.");
-        goto cleanup;
-    }
-    
-    code = g_strndup(message, 3);
-    if(fla->debug_mode) purple_debug_info(FLIST_DEBUG, "Parsing message... (Code: %s)\n", code);
-    
-    if(len > 3) {
-        json = g_strdup(message + 4);
-        if(fla->debug_mode) purple_debug_info(FLIST_DEBUG, "(JSON data: (%s))\n", json);
-
-        parser = json_parser_new();
-        json_parser_load_from_data(parser, json, -1, &err);
-        
-        if(err) { /* not valid json */
-            purple_connection_error_reason(pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent non-JSON data.");
-            g_error_free(err);
-            goto cleanup;
-        }
-        root = json_parser_get_root(parser);
-        if(json_node_get_node_type(root) != JSON_NODE_OBJECT) {
-            purple_connection_error_reason(pc, PURPLE_CONNECTION_ERROR_NETWORK_ERROR, "The server sent JSON data that is not an object.");
-            goto cleanup;
-        }
-        object = json_node_get_object(root);
-    } else {
-        if(fla->debug_mode) purple_debug_info(FLIST_DEBUG, "(No JSON data was included.)\n");
-    }
-    
-    success = TRUE;
-    purple_debug_info(FLIST_DEBUG, "Processing message... (Code: %s)\n", code);
-    flist_callback(pc, code, object);
-    
-    cleanup:
-    g_free(message);
-    if(code) g_free(code);
-    if(json) g_free(json);
-    if(parser) g_object_unref(parser);
-    
-    return success;
 }
 
 static void flist_identify(FListAccount *fla) {
@@ -380,7 +371,7 @@ static gboolean flist_handle_handshake(PurpleConnection *pc) {
 static void flist_process_real(FListAccount *fla) {
     if(!flist_recv(fla)) return;
     if(fla->connection_status == FLIST_HANDSHAKE && !flist_handle_handshake(fla->pc)) return;
-    while(flist_handle_input(fla->pc));
+    flist_process_hybi(fla);
 }
 
 static void flist_process(gpointer data, gint source, PurpleInputCondition cond) {
@@ -418,7 +409,7 @@ static void flist_handshake(FListAccount *fla) {
     headers = g_string_free(headers_str, FALSE);
 
     purple_debug_info(FLIST_DEBUG, "Sending WebSocket handshake...\n");
-    len = flist_write_raw(fla, headers, strlen(headers)); //TODO: check return value
+    len = flist_write_raw(fla, headers, strlen(headers));
     fla->connection_status = FLIST_HANDSHAKE;
     g_free(headers);
     
