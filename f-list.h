@@ -205,6 +205,8 @@ enum FListFriendsRequestType_ {
 GSList *flist_get_gender_list();
 FListGender flist_parse_gender(const gchar *gender_string);
 const gchar *flist_format_gender(FListGender gender);
+const gchar *flist_format_gender_color(FListGender gender);
+const gchar *flist_gender_color(FListGender gender);
 
 /* status conversion */
 GSList *flist_get_status_list();
@@ -255,6 +257,15 @@ gboolean flist_get_channel_show_chat(FListAccount *, const gchar *);
 void flist_set_channel_show_ads(FListAccount *, const gchar *, gboolean);
 void flist_set_channel_show_chat(FListAccount *, const gchar *, gboolean);
 void flist_channel_show_message(FListAccount *, const gchar *);
+
+
+struct FListGenderStruct_ {
+    FListGender gender;
+    const gchar *name;
+    const gchar *display_name;
+    const gchar *color;
+    const gchar *colored_name;
+};
 
 struct FListCharacter_ {
     gchar* name;

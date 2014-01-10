@@ -539,7 +539,7 @@ static void flist_who_single(FListAccount *fla, PurpleConversation *convo, FList
     } else {
         g_string_append_printf(message_str, "[user]%s[/user] ", character->name);
     }
-    g_string_append_printf(message_str, "(%s) ", flist_format_gender(character->gender));
+    g_string_append_printf(message_str, "(%s) ", flist_format_gender_color(character->gender));
     if(character->status_message && strlen(character->status_message)) {
         g_string_append_printf(message_str, "%s - %s", flist_format_status(character->status), character->status_message);
     } else {

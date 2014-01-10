@@ -35,7 +35,7 @@
 
 GSList *gender_list;
 GHashTable *str_to_gender;
-GHashTable *gender_to_proper_str;
+GHashTable *gender_to_struct;
 
 GSList *status_list;
 GHashTable *str_to_status;
@@ -47,6 +47,19 @@ GHashTable *str_to_channel_mode;
 
 GHashTable *account_to_string;
 GHashTable *string_to_account;
+
+#define FLIST_GENDER_COUNT 8
+struct FListGenderStruct_ genders[FLIST_GENDER_COUNT] = {
+    { FLIST_GENDER_NONE, "None", "None", "#FFFFBB", "[color=#FFFFBB]None[/color]" },
+    { FLIST_GENDER_MALE, "Male", "Male", "#6699FF", "[color=#6699FF]Male[/color]" },
+    { FLIST_GENDER_FEMALE, "Female", "Female", "#FF6699", "[color=#FF6699]Female[/color]" },
+    { FLIST_GENDER_HERM, "Herm", "Herm", "#9B30FF", "[color=#9B30FF]Herm[/color]" },
+    { FLIST_GENDER_MALEHERM, "Male-Herm", "Male-Herm", "#007FFF", "[color=#007FFF]Male-Herm[/color]" },
+    { FLIST_GENDER_CUNTBOY, "Cunt-boy", "Cunt-boy", "#00CC66", "[color=#00CC66]Cunt-boy[/color]" },
+    { FLIST_GENDER_SHEMALE, "Shemale", "Shemale", "#CC66FF", "[color=#CC66FF]Shemale[/color]" },
+    { FLIST_GENDER_TRANSGENDER, "Transgender", "Transgender", "#EE8822", "[color=#EE8822]Transgender[/color]" }
+};
+struct FListGenderStruct_ gender_unknown = { FLIST_GENDER_UNKNOWN, "Unknown", "Unknown", "#FFFFBB", "[color=#FFFFBB]Unknown[/color]" };
 
 static gpointer _flist_lookup(GHashTable *table, gpointer key, gpointer def) {
     gpointer ret;
@@ -60,14 +73,25 @@ GSList *flist_get_status_list() {
     return status_list;
 }
 
-FListChannelMode flist_parse_channel_mode(const gchar *k) {
-    return (FListChannelMode) _flist_lookup(str_to_channel_mode, (gpointer) k, (gpointer) CHANNEL_MODE_UNKNOWN);
-}
 FListGender flist_parse_gender(const gchar *k) {
-    return (FListGender) _flist_lookup(str_to_gender, (gpointer) k, (gpointer) FLIST_GENDER_UNKNOWN);
+    const struct FListGenderStruct_* gender = _flist_lookup(str_to_gender, (gpointer) k, (gpointer) &gender_unknown);
+    return (FListGender) gender->gender;
 }
 const gchar *flist_format_gender(FListGender k) {
-    return (const gchar *) _flist_lookup(gender_to_proper_str, (gpointer) k, (gpointer) "Unknown");
+    const struct FListGenderStruct_* gender = _flist_lookup(gender_to_struct, (gpointer) k, (gpointer) &gender_unknown);
+    return gender->display_name;
+}
+const gchar *flist_format_gender_color(FListGender k) {
+    const struct FListGenderStruct_* gender = _flist_lookup(gender_to_struct, (gpointer) k, (gpointer) &gender_unknown);
+    return gender->colored_name;
+}
+const gchar *flist_gender_color(FListGender k) {
+    const struct FListGenderStruct_* gender = _flist_lookup(gender_to_struct, (gpointer) k, (gpointer) &gender_unknown);
+    return gender->color;
+}
+
+FListChannelMode flist_parse_channel_mode(const gchar *k) {
+    return (FListChannelMode) _flist_lookup(str_to_channel_mode, (gpointer) k, (gpointer) CHANNEL_MODE_UNKNOWN);
 }
 FListStatus flist_parse_status(const gchar *k) {
     return (FListStatus) _flist_lookup(str_to_status, (gpointer) k, (gpointer) FLIST_STATUS_UNKNOWN);
@@ -688,42 +712,24 @@ static void plugin_init(PurplePlugin *plugin) {
     
     option = purple_account_option_bool_new("Debug Mode", "debug_mode", FALSE);
     prpl_info.protocol_options = g_list_append(prpl_info.protocol_options, option);
-
+    
+    str_to_gender = g_hash_table_new(g_str_hash, g_str_equal);
+    gender_to_struct = g_hash_table_new(g_direct_hash, NULL);
     gender_list = NULL;
-    gender_list = g_slist_prepend(gender_list, "Male");
-    gender_list = g_slist_prepend(gender_list, "Female");
-    gender_list = g_slist_prepend(gender_list, "Transgender");
-    gender_list = g_slist_prepend(gender_list, "Herm");
-    gender_list = g_slist_prepend(gender_list, "Shemale");
-    gender_list = g_slist_prepend(gender_list, "Male-Herm");
-    gender_list = g_slist_prepend(gender_list, "Cunt-boy");
-    gender_list = g_slist_prepend(gender_list, "None");
+    int i;
+    for(i = 0; i < FLIST_GENDER_COUNT; i++) {
+        gender_list = g_slist_prepend(gender_list, (gpointer) genders[i].name);
+        g_hash_table_insert(str_to_gender, (gpointer) genders[i].name, &genders[i]);
+        g_hash_table_insert(gender_to_struct, (gpointer) genders[i].gender, &genders[i]);
+    }
     gender_list = g_slist_reverse(gender_list);
+    g_hash_table_insert(str_to_gender, (gpointer) gender_unknown.name, &gender_unknown);
+    g_hash_table_insert(gender_to_struct, (gpointer) gender_unknown.gender, &gender_unknown);
     
     str_to_channel_mode = g_hash_table_new(g_str_hash, g_str_equal);
     g_hash_table_insert(str_to_channel_mode, "both", GINT_TO_POINTER(CHANNEL_MODE_BOTH));
     g_hash_table_insert(str_to_channel_mode, "ads", GINT_TO_POINTER(CHANNEL_MODE_ADS_ONLY));
     g_hash_table_insert(str_to_channel_mode, "chat", GINT_TO_POINTER(CHANNEL_MODE_CHAT_ONLY));
-    
-    str_to_gender = g_hash_table_new(g_str_hash, g_str_equal);
-    g_hash_table_insert(str_to_gender, "Male", GINT_TO_POINTER(FLIST_GENDER_MALE));
-    g_hash_table_insert(str_to_gender, "Female", GINT_TO_POINTER(FLIST_GENDER_FEMALE));
-    g_hash_table_insert(str_to_gender, "Transgender", GINT_TO_POINTER(FLIST_GENDER_TRANSGENDER));
-    g_hash_table_insert(str_to_gender, "Herm", GINT_TO_POINTER(FLIST_GENDER_HERM));
-    g_hash_table_insert(str_to_gender, "Shemale", GINT_TO_POINTER(FLIST_GENDER_SHEMALE));
-    g_hash_table_insert(str_to_gender, "Male-Herm", GINT_TO_POINTER(FLIST_GENDER_MALEHERM));
-    g_hash_table_insert(str_to_gender, "Cunt-boy", GINT_TO_POINTER(FLIST_GENDER_CUNTBOY));
-    g_hash_table_insert(str_to_gender, "None", GINT_TO_POINTER(FLIST_GENDER_NONE));
-
-    gender_to_proper_str = g_hash_table_new(g_direct_hash, NULL);
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_MALE), "Male");
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_FEMALE), "Female");
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_TRANSGENDER), "Transgender");
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_HERM), "Herm");
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_SHEMALE), "Shemale");
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_MALEHERM), "Male-Herm");
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_CUNTBOY), "Cunt-boy");
-    g_hash_table_insert(gender_to_proper_str, GINT_TO_POINTER(FLIST_GENDER_NONE), "None");
     
     status_list = NULL;
     status_list = g_slist_prepend(status_list, "online");
