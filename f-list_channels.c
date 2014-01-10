@@ -530,6 +530,74 @@ void flist_channel_print_error(PurpleConversation *convo, const gchar *message) 
     purple_conv_chat_write(PURPLE_CONV_CHAT(convo), NULL, message, PURPLE_MESSAGE_ERROR, time(NULL));
 }
 
+static void flist_who_single(FListAccount *fla, PurpleConversation *convo, FListCharacter *character, gboolean icon) {
+    GString *message_str = g_string_new("");
+    gchar *message, *parsed_message;
+    
+    if(icon) {
+        g_string_append_printf(message_str, "[icon]%s[/icon] ", character->name);
+    } else {
+        g_string_append_printf(message_str, "[user]%s[/user] ", character->name);
+    }
+    g_string_append_printf(message_str, "(%s) ", flist_format_gender(character->gender));
+    if(character->status_message && strlen(character->status_message)) {
+        g_string_append_printf(message_str, "%s - %s", flist_format_status(character->status), character->status_message);
+    } else {
+        g_string_append(message_str, flist_format_status(character->status));
+    }
+    
+    message = g_string_free(message_str, FALSE);
+    parsed_message = flist_bbcode_to_html(fla, NULL, message);
+    
+    purple_conversation_write(convo, NULL, parsed_message, PURPLE_MESSAGE_SYSTEM, time(NULL));
+
+    g_free(message);
+    g_free(parsed_message);
+}
+
+static gint flist_who_compare(gconstpointer a, gconstpointer b) {
+    const FListCharacter *c1 = a, *c2 = b;
+    return flist_strcmp(c1->name, c2->name);
+}
+
+static void flist_who(FListAccount *fla, PurpleConversation *convo, GList *who, gboolean icons) {
+    who = g_list_sort(who, flist_who_compare);
+    
+    while(who) {
+        FListCharacter *character = who->data;
+        flist_who_single(fla, convo, character, icons);
+        who = who->next;
+    }
+}
+
+PurpleCmdRet flist_channel_who_cmd(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
+    PurpleConnection *pc = purple_conversation_get_gc(convo);
+    FListAccount *fla = pc->proto_data;
+    const gchar *name = purple_conversation_get_name(convo);
+    FListChannel *fchannel = flist_channel_find(fla, name);
+    GList *chat_buddies, *list = NULL;
+    
+    g_return_val_if_fail(fchannel != NULL, PURPLE_CMD_STATUS_FAILED);
+    
+    chat_buddies = purple_conv_chat_get_users(PURPLE_CONV_CHAT(convo));
+    while(chat_buddies) {
+        PurpleConvChatBuddy *buddy = chat_buddies->data;
+        FListCharacter *character = flist_get_character(fla, purple_conv_chat_cb_get_name(buddy));
+        
+        if(character) {
+            list = g_list_prepend(list, character);
+        } else {
+            purple_debug_warning(FLIST_DEBUG, "Unable to find character to display info. (Target: %s)\n", purple_conv_chat_cb_get_name(buddy));
+        }
+        chat_buddies = chat_buddies->next;
+    }
+    list = g_list_reverse(list);
+    
+    flist_who(fla, convo, list, FALSE);
+    
+    return PURPLE_CMD_RET_OK;
+}
+
 PurpleCmdRet flist_channel_oplist_cmd(PurpleConversation *convo, const gchar *cmd, gchar **args, gchar **error, void *data) {
     PurpleConnection *pc = purple_conversation_get_gc(convo);
     FListAccount *fla = pc->proto_data;
@@ -539,7 +607,7 @@ PurpleCmdRet flist_channel_oplist_cmd(PurpleConversation *convo, const gchar *cm
     gchar *to_print;
     GList *cur;
     
-    g_return_val_if_fail(fchannel != NULL, PURPLE_CMD_STATUS_OK);
+    g_return_val_if_fail(fchannel != NULL, PURPLE_CMD_STATUS_FAILED);
     
     str = g_string_new(NULL);
     if(!fchannel->owner && !fchannel->operators) {
